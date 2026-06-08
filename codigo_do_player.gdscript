@@ -1,0 +1,78 @@
+extends CharacterBody3D
+
+@export_category("Settings Player")
+@export var SPEED = 8.0
+@export var JUMP_VELOCITY = 6.5
+@export var SPRINT_MULTIPLIER = 2.0
+
+@export_category("Settings Mouse")
+@export var mouse_sensitivity = 0.002
+@export var camera_limit_down = -80.0
+@export var camera_limit_up = 60.0
+
+@export_group("Zoom")
+@export var zoom_minimum = 2.0   
+@export var zoom_maximum = 10.0
+@export var zoom_speed = 1.0
+
+var gravity = ProjectSettings.get_setting("physics/3d/default_gravity")
+var cam_ver = 0.0
+
+@onready var camera_spring = get_node_or_null("cabeça/vertical")
+@onready var pescoco_node = get_tree().current_scene.find_child("pescoço", true, false) if get_tree() else null
+
+
+func _ready():
+	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		rotate_y(-event.relative.x * mouse_sensitivity)
+		
+		cam_ver -= event.relative.y * mouse_sensitivity
+		cam_ver = clamp(cam_ver, deg_to_rad(camera_limit_down), deg_to_rad(camera_limit_up))
+		
+		if camera_spring:
+			camera_spring.rotation.x = cam_ver
+			
+		if pescoco_node:
+			pescoco_node.rotation.x = cam_ver
+
+	if event is InputEventMouseButton and camera_spring:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			camera_spring.spring_length = clamp(camera_spring.spring_length - zoom_speed, zoom_minimum, zoom_maximum)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			camera_spring.spring_length = clamp(camera_spring.spring_length + zoom_speed, zoom_minimum, zoom_maximum)
+
+
+
+
+func _physics_process(delta):
+	if not camera_spring:
+		camera_spring = find_child("*", true, false) as SpringArm3D
+
+	#correr
+	var current_speed = SPEED
+	if Input.is_key_pressed(KEY_SHIFT): 
+		current_speed = SPEED * SPRINT_MULTIPLIER
+		
+	#gravidade
+	if not is_on_floor():
+		velocity.y -= gravity * delta
+
+	#mecanica de pulo
+	if Input.is_key_pressed(KEY_SPACE) and is_on_floor():
+		velocity.y = JUMP_VELOCITY
+
+	var input_dir = Input.get_vector("ui_down", "ui_up", "ui_right", "ui_left")
+	var direction = (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
+	
+	if direction:
+		velocity.x = direction.x * current_speed
+		velocity.z = direction.z * current_speed
+	else:
+		velocity.x = move_toward(velocity.x, 0, current_speed)
+		velocity.z = move_toward(velocity.z, 0, current_speed)
+
+
+	move_and_slide()
